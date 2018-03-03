@@ -3,12 +3,17 @@ package main
 import (
 	"database/sql"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log"
 	"net/http"
 	"os"
+	"strconv"
 	"time"
 
+	"github.com/gorilla/handlers"
+
+	"github.com/auth0/go-jwt-middleware"
 	"github.com/dgrijalva/jwt-go"
 	_ "github.com/go-sql-driver/mysql"
 	"github.com/gorilla/mux"
@@ -53,12 +58,19 @@ func main() {
 		log.Fatalf(err.Error())
 	}
 
+	jwtMiddleware := jwtmiddleware.New(jwtmiddleware.Options{
+		ValidationKeyGetter: func(token *jwt.Token) (interface{}, error) {
+			return []byte(config.SECRET), nil
+		},
+		SigningMethod: jwt.SigningMethodHS256,
+	})
+
 	r := mux.NewRouter()
 	r.HandleFunc("/users/signup", logger(signup)).Methods("POST")
 	r.HandleFunc("/users/signin", logger(signin)).Methods("POST")
-	r.HandleFunc("/users/{id}/chats", logger(GetChats)).Methods("GET")
+	r.Handle("/users/{id}/chats", jwtMiddleware.Handler(getChatsHandler)).Methods("GET")
 	fmt.Println("Server starting on port", config.PORT)
-	log.Fatal(http.ListenAndServe(config.PORT, r))
+	log.Fatal(http.ListenAndServe(config.PORT, handlers.LoggingHandler(os.Stdout, r)))
 }
 
 func logger(f http.HandlerFunc) http.HandlerFunc {
@@ -78,6 +90,8 @@ func ErrorWriter(w http.ResponseWriter, status int) {
 		http.Error(w, http.StatusText(http.StatusBadRequest), http.StatusBadRequest)
 	case 401:
 		http.Error(w, http.StatusText(http.StatusUnauthorized), http.StatusUnauthorized)
+	case 403:
+		http.Error(w, http.StatusText(http.StatusForbidden), http.StatusForbidden)
 	case 404:
 		http.Error(w, http.StatusText(http.StatusNotFound), http.StatusNotFound)
 	case 500:
@@ -87,9 +101,38 @@ func ErrorWriter(w http.ResponseWriter, status int) {
 	}
 }
 
-func GetChats(w http.ResponseWriter, r *http.Request) {
-	vars := mux.Vars(r)
+func getClaimsFromToken(r *http.Request) (jwt.MapClaims, error) {
+	user, ok := r.Context().Value("user").(*jwt.Token)
+	if !ok {
+		return nil, errors.New("Invalid token")
+	}
+	claims := user.Claims.(jwt.MapClaims)
+	return claims, nil
+}
 
+var getChatsHandler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	claims, err := getClaimsFromToken(r)
+	if err != nil {
+		ErrorWriter(w, 400)
+		return
+	}
+	fmt.Println(claims)
+	claimsID, ok := claims["id"].(float64)
+	if !ok {
+		ErrorWriter(w, 400)
+		return
+	}
+	vars := mux.Vars(r)
+	varsID, err := strconv.Atoi(vars["id"])
+	if err != nil {
+		ErrorWriter(w, 400)
+		return
+	}
+	fmt.Println(varsID != int(claimsID))
+	if varsID != int(claimsID) {
+		ErrorWriter(w, 403)
+		return
+	}
 	rows, err := db.Query(
 		`SELECT t1.chat_id, username, body, send_time
 		FROM chat_user_chat t1
@@ -97,7 +140,7 @@ func GetChats(w http.ResponseWriter, r *http.Request) {
 		INNER JOIN chat_user t3 ON t1.chat_user_id=t3.id
 		INNER JOIN chat t4 ON t4.id=t1.chat_id
 		INNER JOIN message t5 ON t5.id=t4.last_message_id
-		WHERE t2.chat_user_id=?`, vars["id"], vars["id"])
+		WHERE t2.chat_user_id=?`, claims["id"], claims["id"])
 	if err != nil {
 		fmt.Println(err)
 		ErrorWriter(w, 500)
@@ -122,6 +165,7 @@ func GetChats(w http.ResponseWriter, r *http.Request) {
 	err = rows.Err()
 	if err != nil {
 		ErrorWriter(w, 500)
+		return
 	}
 
 	fchats := []Chat{}
@@ -142,7 +186,7 @@ func GetChats(w http.ResponseWriter, r *http.Request) {
 	}
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(fchats)
-}
+})
 
 func signup(w http.ResponseWriter, r *http.Request) {
 	var data map[string]interface{}
