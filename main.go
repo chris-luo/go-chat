@@ -73,23 +73,12 @@ func main() {
 	})
 
 	r := mux.NewRouter()
-	r.HandleFunc("/users/signup", logger(signup)).Methods("POST")
-	r.HandleFunc("/users/signin", logger(signin)).Methods("POST")
+	r.HandleFunc("/users/signup", signup).Methods("POST")
+	r.HandleFunc("/users/signin", signin).Methods("POST")
 	r.Handle("/users/{id}/chats", jwtMiddleware.Handler(getChatsHandler)).Methods("GET")
 	r.Handle("/users/{id}/chats/{chat_id}/messages", jwtMiddleware.Handler(getChatMessagesHandler)).Methods("GET")
 	fmt.Println("Server starting on port", config.PORT)
 	log.Fatal(http.ListenAndServe(config.PORT, handlers.LoggingHandler(os.Stdout, r)))
-}
-
-func logger(f http.HandlerFunc) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		start := time.Now()
-
-		defer func() {
-			log.Println(r.Method, r.URL.Path, time.Since(start).Seconds()*1000, "ms")
-		}()
-		f(w, r)
-	}
 }
 
 func ErrorWriter(w http.ResponseWriter, status int) {
@@ -124,7 +113,6 @@ var getChatsHandler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Reque
 		ErrorWriter(w, 400)
 		return
 	}
-	fmt.Println(claims)
 	claimsID, ok := claims["id"].(float64)
 	if !ok {
 		ErrorWriter(w, 400)
@@ -136,7 +124,6 @@ var getChatsHandler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Reque
 		ErrorWriter(w, 400)
 		return
 	}
-	fmt.Println(varsID != int(claimsID))
 	if varsID != int(claimsID) {
 		ErrorWriter(w, 403)
 		return
@@ -150,7 +137,6 @@ var getChatsHandler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Reque
 		INNER JOIN message t5 ON t5.id=t4.last_message_id
 		WHERE t2.chat_user_id=?`, claims["id"], claims["id"])
 	if err != nil {
-		fmt.Println(err)
 		ErrorWriter(w, 500)
 		return
 	}
