@@ -37,6 +37,13 @@ type Chat struct {
 	Send_time string   `json:"send_time"`
 }
 
+type Message struct {
+	Id          int    `json:"id"`
+	Body        string `json:"body"`
+	Send_time   string `json:"send_time"`
+	Read_status int    `json:"read_status"`
+}
+
 func main() {
 	file, err := os.Open("config/config.development.json")
 	if err != nil {
@@ -69,6 +76,7 @@ func main() {
 	r.HandleFunc("/users/signup", logger(signup)).Methods("POST")
 	r.HandleFunc("/users/signin", logger(signin)).Methods("POST")
 	r.Handle("/users/{id}/chats", jwtMiddleware.Handler(getChatsHandler)).Methods("GET")
+	r.Handle("/users/{id}/chats/{chat_id}/messages", jwtMiddleware.Handler(getChatMessagesHandler)).Methods("GET")
 	fmt.Println("Server starting on port", config.PORT)
 	log.Fatal(http.ListenAndServe(config.PORT, handlers.LoggingHandler(os.Stdout, r)))
 }
@@ -186,6 +194,60 @@ var getChatsHandler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Reque
 	}
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(fchats)
+})
+
+var getChatMessagesHandler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	claims, err := getClaimsFromToken(r)
+	if err != nil {
+		ErrorWriter(w, 400)
+		return
+	}
+	claimsID, ok := claims["id"].(float64)
+	if !ok {
+		ErrorWriter(w, 400)
+		return
+	}
+	vars := mux.Vars(r)
+	varsID, err := strconv.Atoi(vars["id"])
+	if err != nil {
+		ErrorWriter(w, 400)
+		return
+	}
+	if varsID != int(claimsID) {
+		ErrorWriter(w, 403)
+		return
+	}
+	rows, err := db.Query(
+		`SELECT id, body, send_time, read_status 
+		FROM chat.message t1 
+		INNER JOIN chat.chat_user_chat_message t2 ON t1.id = t2.message_id 
+		WHERE t2.chat_user_chat_id=? AND t2.chat_user_id=? LIMIT 25`, vars["chat_id"], claims["id"])
+	if err != nil {
+		ErrorWriter(w, 500)
+		return
+	}
+	defer rows.Close()
+	var id int
+	var body string
+	var send_time string
+	var read_status int
+	messages := []Message{}
+	for rows.Next() {
+		err := rows.Scan(&id, &body, &send_time, &read_status)
+		if err != nil {
+			ErrorWriter(w, 500)
+			return
+		}
+		messages = append(messages, Message{id, body, send_time, read_status})
+	}
+
+	err = rows.Err()
+	if err != nil {
+		ErrorWriter(w, 500)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(messages)
 })
 
 func signup(w http.ResponseWriter, r *http.Request) {
