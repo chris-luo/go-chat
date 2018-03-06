@@ -28,17 +28,17 @@ type Configuration struct {
 	PORT          string
 	DB_CONNECTION string
 	SECRET        string
+	ALLOW_ORIGIN  string
 }
 
 type Chat struct {
-	Id        int64    `json:"id"`
-	Users     []string `json:"users"`
-	Body      string   `json:"body"`
-	Send_time string   `json:"send_time"`
+	Id       int64     `json:"id"`
+	Users    []string  `json:"users"`
+	Messages []Message `json:"messages"`
 }
 
 type Message struct {
-	Id          int    `json:"id"`
+	Id          int64  `json:"id"`
 	Body        string `json:"body"`
 	Send_time   string `json:"send_time"`
 	Read_status int    `json:"read_status"`
@@ -72,13 +72,16 @@ func main() {
 		SigningMethod: jwt.SigningMethodHS256,
 	})
 
+	originsOk := handlers.AllowedOrigins([]string{config.ALLOW_ORIGIN})
+	headersOk := handlers.AllowedHeaders([]string{"Content-Type", "Authorization"})
+
 	r := mux.NewRouter()
 	r.HandleFunc("/users/signup", signup).Methods("POST")
 	r.HandleFunc("/users/signin", signin).Methods("POST")
 	r.Handle("/users/{id}/chats", jwtMiddleware.Handler(getChatsHandler)).Methods("GET")
 	r.Handle("/users/{id}/chats/{chat_id}/messages", jwtMiddleware.Handler(getChatMessagesHandler)).Methods("GET")
 	fmt.Println("Server starting on port", config.PORT)
-	log.Fatal(http.ListenAndServe(config.PORT, handlers.LoggingHandler(os.Stdout, r)))
+	log.Fatal(http.ListenAndServe(config.PORT, handlers.CORS(originsOk, headersOk)(handlers.LoggingHandler(os.Stdout, r))))
 }
 
 func ErrorWriter(w http.ResponseWriter, status int) {
@@ -129,13 +132,14 @@ var getChatsHandler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Reque
 		return
 	}
 	rows, err := db.Query(
-		`SELECT t1.chat_id, username, body, send_time
+		`SELECT t1.chat_id, username, message_id, body, send_time, read_status
 		FROM chat_user_chat t1
 		INNER JOIN chat_user_chat t2 ON t1.chat_id=t2.chat_id AND t1.chat_user_id!=?
 		INNER JOIN chat_user t3 ON t1.chat_user_id=t3.id
 		INNER JOIN chat t4 ON t4.id=t1.chat_id
 		INNER JOIN message t5 ON t5.id=t4.last_message_id
-		WHERE t2.chat_user_id=?`, claims["id"], claims["id"])
+		INNER JOIN chat_user_chat_message t6 ON t6.message_id=t4.last_message_id AND t6.chat_user_id=?
+		WHERE t2.chat_user_id=?`, claims["id"], claims["id"], claims["id"])
 	if err != nil {
 		ErrorWriter(w, 500)
 		return
@@ -143,17 +147,20 @@ var getChatsHandler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Reque
 	defer rows.Close()
 	var chat_id int64
 	var username string
+	var message_id int64
 	var body string
 	var send_time string
+	var read_status int
 	chats := []Chat{}
 	for rows.Next() {
-		err := rows.Scan(&chat_id, &username, &body, &send_time)
+		err := rows.Scan(&chat_id, &username, &message_id, &body, &send_time, &read_status)
 		if err != nil {
 			ErrorWriter(w, 500)
 			return
 		}
 		users := []string{username}
-		chats = append(chats, Chat{chat_id, users, body, send_time})
+		messages := []Message{Message{message_id, body, send_time, read_status}}
+		chats = append(chats, Chat{chat_id, users, messages})
 	}
 
 	err = rows.Err()
@@ -213,7 +220,7 @@ var getChatMessagesHandler = http.HandlerFunc(func(w http.ResponseWriter, r *htt
 		return
 	}
 	defer rows.Close()
-	var id int
+	var id int64
 	var body string
 	var send_time string
 	var read_status int
