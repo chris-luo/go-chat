@@ -40,6 +40,7 @@ type Chat struct {
 type Message struct {
 	Id          int64  `json:"id"`
 	Body        string `json:"body"`
+	Sender_id   int64  `json:"sender_id"`
 	Send_time   string `json:"send_time"`
 	Read_status int    `json:"read_status"`
 }
@@ -132,7 +133,7 @@ var getChatsHandler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Reque
 		return
 	}
 	rows, err := db.Query(
-		`SELECT t1.chat_id, username, message_id, body, send_time, read_status
+		`SELECT t1.chat_id, username, message_id, body, sender_id, send_time, read_status
 		FROM chat_user_chat t1
 		INNER JOIN chat_user_chat t2 ON t1.chat_id=t2.chat_id AND t1.chat_user_id!=?
 		INNER JOIN chat_user t3 ON t1.chat_user_id=t3.id
@@ -149,17 +150,18 @@ var getChatsHandler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Reque
 	var username string
 	var message_id int64
 	var body string
+	var sender_id int64
 	var send_time string
 	var read_status int
 	chats := []Chat{}
 	for rows.Next() {
-		err := rows.Scan(&chat_id, &username, &message_id, &body, &send_time, &read_status)
+		err := rows.Scan(&chat_id, &username, &message_id, &body, &sender_id, &send_time, &read_status)
 		if err != nil {
 			ErrorWriter(w, 500)
 			return
 		}
 		users := []string{username}
-		messages := []Message{Message{message_id, body, send_time, read_status}}
+		messages := []Message{Message{message_id, body, sender_id, send_time, read_status}}
 		chats = append(chats, Chat{chat_id, users, messages})
 	}
 
@@ -211,7 +213,7 @@ var getChatMessagesHandler = http.HandlerFunc(func(w http.ResponseWriter, r *htt
 		return
 	}
 	rows, err := db.Query(
-		`SELECT id, body, send_time, read_status 
+		`SELECT id, body, sender_id, send_time, read_status
 		FROM chat.message t1 
 		INNER JOIN chat.chat_user_chat_message t2 ON t1.id = t2.message_id 
 		WHERE t2.chat_user_chat_id=? AND t2.chat_user_id=? LIMIT 25`, vars["chat_id"], claims["id"])
@@ -222,16 +224,17 @@ var getChatMessagesHandler = http.HandlerFunc(func(w http.ResponseWriter, r *htt
 	defer rows.Close()
 	var id int64
 	var body string
+	var sender_id int64
 	var send_time string
 	var read_status int
 	messages := []Message{}
 	for rows.Next() {
-		err := rows.Scan(&id, &body, &send_time, &read_status)
+		err := rows.Scan(&id, &body, &sender_id, &send_time, &read_status)
 		if err != nil {
 			ErrorWriter(w, 500)
 			return
 		}
-		messages = append(messages, Message{id, body, send_time, read_status})
+		messages = append(messages, Message{id, body, sender_id, send_time, read_status})
 	}
 
 	err = rows.Err()
