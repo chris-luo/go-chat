@@ -212,11 +212,16 @@ var getChatMessagesHandler = http.HandlerFunc(func(w http.ResponseWriter, r *htt
 		ErrorWriter(w, 403)
 		return
 	}
+	message_id, err := strconv.Atoi(r.FormValue("message_id"))
+	if err != nil {
+		ErrorWriter(w, 400)
+		return
+	}
 	rows, err := db.Query(
 		`SELECT id, body, sender_id, send_time, read_status
-		FROM chat.message t1 
+		FROM chat.message t1
 		INNER JOIN chat.chat_user_chat_message t2 ON t1.id = t2.message_id 
-		WHERE t2.chat_user_chat_id=? AND t2.chat_user_id=? LIMIT 25`, vars["chat_id"], claims["id"])
+		WHERE t2.chat_user_chat_id=? AND t2.chat_user_id=? AND id < ? LIMIT 25`, vars["chat_id"], claims["id"], message_id)
 	if err != nil {
 		ErrorWriter(w, 500)
 		return
