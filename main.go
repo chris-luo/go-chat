@@ -32,17 +32,17 @@ type Configuration struct {
 }
 
 type Chat struct {
-	Id       int64     `json:"id"`
+	ID       int64     `json:"id"`
 	Users    []string  `json:"users"`
 	Messages []Message `json:"messages"`
 }
 
 type Message struct {
-	Id          int64  `json:"id"`
-	Body        string `json:"body"`
-	Sender_id   int64  `json:"sender_id"`
-	Send_time   string `json:"send_time"`
-	Read_status int    `json:"read_status"`
+	ID         int64  `json:"id"`
+	Body       string `json:"body"`
+	SenderID   int64  `json:"sender_id"`
+	SendTime   string `json:"send_time"`
+	ReadStatus int    `json:"read_status"`
 }
 
 func main() {
@@ -85,7 +85,7 @@ func main() {
 	log.Fatal(http.ListenAndServe(config.PORT, handlers.CORS(originsOk, headersOk)(handlers.LoggingHandler(os.Stdout, r))))
 }
 
-func ErrorWriter(w http.ResponseWriter, status int) {
+func errorWriter(w http.ResponseWriter, status int) {
 	switch status {
 	case 400:
 		http.Error(w, http.StatusText(http.StatusBadRequest), http.StatusBadRequest)
@@ -114,22 +114,22 @@ func getClaimsFromToken(r *http.Request) (jwt.MapClaims, error) {
 var getChatsHandler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 	claims, err := getClaimsFromToken(r)
 	if err != nil {
-		ErrorWriter(w, 400)
+		errorWriter(w, 400)
 		return
 	}
 	claimsID, ok := claims["id"].(float64)
 	if !ok {
-		ErrorWriter(w, 400)
+		errorWriter(w, 400)
 		return
 	}
 	vars := mux.Vars(r)
 	varsID, err := strconv.Atoi(vars["id"])
 	if err != nil {
-		ErrorWriter(w, 400)
+		errorWriter(w, 400)
 		return
 	}
 	if varsID != int(claimsID) {
-		ErrorWriter(w, 403)
+		errorWriter(w, 403)
 		return
 	}
 	rows, err := db.Query(
@@ -142,32 +142,32 @@ var getChatsHandler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Reque
 		INNER JOIN chat_user_chat_message t6 ON t6.message_id=t4.last_message_id AND t6.chat_user_id=?
 		WHERE t2.chat_user_id=?`, claims["id"], claims["id"], claims["id"])
 	if err != nil {
-		ErrorWriter(w, 500)
+		errorWriter(w, 500)
 		return
 	}
 	defer rows.Close()
-	var chat_id int64
+	var chatID int64
 	var username string
-	var message_id int64
+	var messageID int64
 	var body string
-	var sender_id int64
-	var send_time string
-	var read_status int
+	var senderID int64
+	var sendTime string
+	var readStatus int
 	chats := []Chat{}
 	for rows.Next() {
-		err := rows.Scan(&chat_id, &username, &message_id, &body, &sender_id, &send_time, &read_status)
+		err := rows.Scan(&chatID, &username, &messageID, &body, &senderID, &sendTime, &readStatus)
 		if err != nil {
-			ErrorWriter(w, 500)
+			errorWriter(w, 500)
 			return
 		}
 		users := []string{username}
-		messages := []Message{Message{message_id, body, sender_id, send_time, read_status}}
-		chats = append(chats, Chat{chat_id, users, messages})
+		messages := []Message{Message{messageID, body, senderID, sendTime, readStatus}}
+		chats = append(chats, Chat{chatID, users, messages})
 	}
 
 	err = rows.Err()
 	if err != nil {
-		ErrorWriter(w, 500)
+		errorWriter(w, 500)
 		return
 	}
 
@@ -179,7 +179,7 @@ var getChatsHandler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Reque
 		i--
 		for j := 0; j < len(chats); j++ {
 			item2 := chats[j]
-			if item.Id == item2.Id && item.Users[0] != item2.Users[0] {
+			if item.ID == item2.ID && item.Users[0] != item2.Users[0] {
 				item.Users = append(item.Users, item2.Users[0])
 				chats = append(chats[:j], chats[j+1:]...)
 				j--
@@ -194,57 +194,57 @@ var getChatsHandler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Reque
 var getChatMessagesHandler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 	claims, err := getClaimsFromToken(r)
 	if err != nil {
-		ErrorWriter(w, 400)
+		errorWriter(w, 400)
 		return
 	}
 	claimsID, ok := claims["id"].(float64)
 	if !ok {
-		ErrorWriter(w, 400)
+		errorWriter(w, 400)
 		return
 	}
 	vars := mux.Vars(r)
 	varsID, err := strconv.Atoi(vars["id"])
 	if err != nil {
-		ErrorWriter(w, 400)
+		errorWriter(w, 400)
 		return
 	}
 	if varsID != int(claimsID) {
-		ErrorWriter(w, 403)
+		errorWriter(w, 403)
 		return
 	}
-	message_id, err := strconv.Atoi(r.FormValue("message_id"))
+	messageID, err := strconv.Atoi(r.FormValue("message_id"))
 	if err != nil {
-		ErrorWriter(w, 400)
+		errorWriter(w, 400)
 		return
 	}
 	rows, err := db.Query(
 		`SELECT id, body, sender_id, send_time, read_status
 		FROM chat.message t1
 		INNER JOIN chat.chat_user_chat_message t2 ON t1.id = t2.message_id 
-		WHERE t2.chat_user_chat_id=? AND t2.chat_user_id=? AND id < ? LIMIT 25`, vars["chat_id"], claims["id"], message_id)
+		WHERE t2.chat_user_chat_id=? AND t2.chat_user_id=? AND id < ? LIMIT 25`, vars["chat_id"], claims["id"], messageID)
 	if err != nil {
-		ErrorWriter(w, 500)
+		errorWriter(w, 500)
 		return
 	}
 	defer rows.Close()
 	var id int64
 	var body string
-	var sender_id int64
-	var send_time string
-	var read_status int
+	var senderID int64
+	var sendTime string
+	var readStatus int
 	messages := []Message{}
 	for rows.Next() {
-		err := rows.Scan(&id, &body, &sender_id, &send_time, &read_status)
+		err := rows.Scan(&id, &body, &senderID, &sendTime, &readStatus)
 		if err != nil {
-			ErrorWriter(w, 500)
+			errorWriter(w, 500)
 			return
 		}
-		messages = append(messages, Message{id, body, sender_id, send_time, read_status})
+		messages = append(messages, Message{id, body, senderID, sendTime, readStatus})
 	}
 
 	err = rows.Err()
 	if err != nil {
-		ErrorWriter(w, 500)
+		errorWriter(w, 500)
 		return
 	}
 	w.Header().Set("Content-Type", "application/json")
@@ -255,51 +255,51 @@ func signup(w http.ResponseWriter, r *http.Request) {
 	var data map[string]interface{}
 	err := json.NewDecoder(r.Body).Decode(&data)
 	if err != nil {
-		ErrorWriter(w, 400)
+		errorWriter(w, 400)
 		return
 	}
 	password, ok := data["password"].(string)
 	if !ok {
-		ErrorWriter(w, 400)
+		errorWriter(w, 400)
 		return
 	}
 	username, ok := data["username"].(string)
 	if !ok {
-		ErrorWriter(w, 400)
+		errorWriter(w, 400)
 		return
 	}
 	email, ok := data["email"].(string)
 	if !ok {
-		ErrorWriter(w, 400)
+		errorWriter(w, 400)
 		return
 	}
 
 	bytes, err := bcrypt.GenerateFromPassword([]byte(password), 12)
 	if err != nil {
-		ErrorWriter(w, 500)
+		errorWriter(w, 500)
 		return
 	}
 
 	stmt, err := db.Prepare("INSERT INTO chat_user (username, email, password) VALUES(?, ?, ?)")
 	if err != nil {
-		ErrorWriter(w, 500)
+		errorWriter(w, 500)
 		return
 	}
 	res, err := stmt.Exec(username, email, bytes)
 	if err != nil {
-		ErrorWriter(w, 500)
+		errorWriter(w, 500)
 		return
 	}
-	lastId, err := res.LastInsertId()
+	lastID, err := res.LastInsertId()
 	if err != nil {
-		ErrorWriter(w, 500)
+		errorWriter(w, 500)
 		return
 	}
 
-	token := GenerateToken(lastId, username, email)
+	token := generateToken(lastID, username, email)
 	tokenString, err := token.SignedString([]byte(config.SECRET))
 	if err != nil {
-		ErrorWriter(w, 500)
+		errorWriter(w, 500)
 		return
 	}
 	m := map[string]string{
@@ -312,46 +312,46 @@ func signin(w http.ResponseWriter, r *http.Request) {
 	var data map[string]interface{}
 	err := json.NewDecoder(r.Body).Decode(&data)
 	if err != nil {
-		ErrorWriter(w, 400)
+		errorWriter(w, 400)
 		return
 	}
 	password, ok := data["password"].(string)
 	if !ok {
-		ErrorWriter(w, 400)
+		errorWriter(w, 400)
 		return
 	}
 	email, ok := data["email"].(string)
 	if !ok {
-		ErrorWriter(w, 400)
+		errorWriter(w, 400)
 		return
 	}
 	var hash string
 	err = db.QueryRow("SELECT password FROM chat_user WHERE email=?", email).Scan(&hash)
 	switch {
 	case err == sql.ErrNoRows:
-		ErrorWriter(w, 401)
+		errorWriter(w, 401)
 	case err != nil:
-		ErrorWriter(w, 500)
+		errorWriter(w, 500)
 	default:
 		err := bcrypt.CompareHashAndPassword([]byte(hash), []byte(password))
 		switch {
 		case err == bcrypt.ErrMismatchedHashAndPassword:
-			ErrorWriter(w, 401)
+			errorWriter(w, 401)
 		case err != nil:
-			ErrorWriter(w, 500)
+			errorWriter(w, 500)
 		default:
 			var id2 int64
 			var username2 string
 			var email2 string
 			err = db.QueryRow("SELECT id, username, email FROM chat_user WHERE email=?", email).Scan(&id2, &username2, &email2)
 			if err != nil {
-				ErrorWriter(w, 500)
+				errorWriter(w, 500)
 				return
 			}
-			token := GenerateToken(id2, username2, email2)
+			token := generateToken(id2, username2, email2)
 			tokenString, err := token.SignedString([]byte(config.SECRET))
 			if err != nil {
-				ErrorWriter(w, 500)
+				errorWriter(w, 500)
 				return
 			}
 			m := map[string]string{
@@ -362,7 +362,7 @@ func signin(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func GenerateToken(id int64, username string, email string) *jwt.Token {
+func generateToken(id int64, username string, email string) *jwt.Token {
 	token := jwt.New(jwt.SigningMethodHS256)
 	claims := token.Claims.(jwt.MapClaims)
 	claims["id"] = id
