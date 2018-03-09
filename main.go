@@ -85,18 +85,18 @@ func main() {
 	log.Fatal(http.ListenAndServe(config.PORT, handlers.CORS(originsOk, headersOk)(handlers.LoggingHandler(os.Stdout, r))))
 }
 
-func errorWriter(w http.ResponseWriter, status int) {
+func errorWriter(w http.ResponseWriter, status int, message string) {
 	switch status {
 	case 400:
-		http.Error(w, http.StatusText(http.StatusBadRequest), http.StatusBadRequest)
+		http.Error(w, message, http.StatusBadRequest)
 	case 401:
-		http.Error(w, http.StatusText(http.StatusUnauthorized), http.StatusUnauthorized)
+		http.Error(w, message, http.StatusUnauthorized)
 	case 403:
-		http.Error(w, http.StatusText(http.StatusForbidden), http.StatusForbidden)
+		http.Error(w, message, http.StatusForbidden)
 	case 404:
-		http.Error(w, http.StatusText(http.StatusNotFound), http.StatusNotFound)
+		http.Error(w, message, http.StatusNotFound)
 	case 500:
-		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
+		http.Error(w, message, http.StatusInternalServerError)
 	default:
 		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
 	}
@@ -114,22 +114,22 @@ func getClaimsFromToken(r *http.Request) (jwt.MapClaims, error) {
 var getChatsHandler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 	claims, err := getClaimsFromToken(r)
 	if err != nil {
-		errorWriter(w, 400)
+		errorWriter(w, 400, http.StatusText(http.StatusBadRequest))
 		return
 	}
 	claimsID, ok := claims["id"].(float64)
 	if !ok {
-		errorWriter(w, 400)
+		errorWriter(w, 400, http.StatusText(http.StatusBadRequest))
 		return
 	}
 	vars := mux.Vars(r)
 	varsID, err := strconv.Atoi(vars["id"])
 	if err != nil {
-		errorWriter(w, 400)
+		errorWriter(w, 400, http.StatusText(http.StatusBadRequest))
 		return
 	}
 	if varsID != int(claimsID) {
-		errorWriter(w, 403)
+		errorWriter(w, 403, http.StatusText(http.StatusForbidden))
 		return
 	}
 	rows, err := db.Query(
@@ -142,7 +142,7 @@ var getChatsHandler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Reque
 		INNER JOIN chat_user_chat_message t6 ON t6.message_id=t4.last_message_id AND t6.chat_user_id=?
 		WHERE t2.chat_user_id=?`, claims["id"], claims["id"], claims["id"])
 	if err != nil {
-		errorWriter(w, 500)
+		errorWriter(w, 500, http.StatusText(http.StatusInternalServerError))
 		return
 	}
 	defer rows.Close()
@@ -157,7 +157,7 @@ var getChatsHandler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Reque
 	for rows.Next() {
 		err := rows.Scan(&chatID, &username, &messageID, &body, &senderID, &sendTime, &readStatus)
 		if err != nil {
-			errorWriter(w, 500)
+			errorWriter(w, 500, http.StatusText(http.StatusInternalServerError))
 			return
 		}
 		users := []string{username}
@@ -167,7 +167,7 @@ var getChatsHandler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Reque
 
 	err = rows.Err()
 	if err != nil {
-		errorWriter(w, 500)
+		errorWriter(w, 500, http.StatusText(http.StatusInternalServerError))
 		return
 	}
 
@@ -194,27 +194,27 @@ var getChatsHandler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Reque
 var getChatMessagesHandler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 	claims, err := getClaimsFromToken(r)
 	if err != nil {
-		errorWriter(w, 400)
+		errorWriter(w, 400, http.StatusText(http.StatusBadRequest))
 		return
 	}
 	claimsID, ok := claims["id"].(float64)
 	if !ok {
-		errorWriter(w, 400)
+		errorWriter(w, 400, http.StatusText(http.StatusBadRequest))
 		return
 	}
 	vars := mux.Vars(r)
 	varsID, err := strconv.Atoi(vars["id"])
 	if err != nil {
-		errorWriter(w, 400)
+		errorWriter(w, 400, http.StatusText(http.StatusBadRequest))
 		return
 	}
 	if varsID != int(claimsID) {
-		errorWriter(w, 403)
+		errorWriter(w, 403, http.StatusText(http.StatusForbidden))
 		return
 	}
 	messageID, err := strconv.Atoi(r.FormValue("message_id"))
 	if err != nil {
-		errorWriter(w, 400)
+		errorWriter(w, 400, http.StatusText(http.StatusBadRequest))
 		return
 	}
 	rows, err := db.Query(
@@ -223,7 +223,7 @@ var getChatMessagesHandler = http.HandlerFunc(func(w http.ResponseWriter, r *htt
 		INNER JOIN chat.chat_user_chat_message t2 ON t1.id = t2.message_id 
 		WHERE t2.chat_user_chat_id=? AND t2.chat_user_id=? AND id < ? LIMIT 25`, vars["chat_id"], claims["id"], messageID)
 	if err != nil {
-		errorWriter(w, 500)
+		errorWriter(w, 500, http.StatusText(http.StatusInternalServerError))
 		return
 	}
 	defer rows.Close()
@@ -236,7 +236,7 @@ var getChatMessagesHandler = http.HandlerFunc(func(w http.ResponseWriter, r *htt
 	for rows.Next() {
 		err := rows.Scan(&id, &body, &senderID, &sendTime, &readStatus)
 		if err != nil {
-			errorWriter(w, 500)
+			errorWriter(w, 500, http.StatusText(http.StatusInternalServerError))
 			return
 		}
 		messages = append(messages, Message{id, body, senderID, sendTime, readStatus})
@@ -244,7 +244,7 @@ var getChatMessagesHandler = http.HandlerFunc(func(w http.ResponseWriter, r *htt
 
 	err = rows.Err()
 	if err != nil {
-		errorWriter(w, 500)
+		errorWriter(w, 500, http.StatusText(http.StatusInternalServerError))
 		return
 	}
 	w.Header().Set("Content-Type", "application/json")
@@ -255,51 +255,51 @@ func signup(w http.ResponseWriter, r *http.Request) {
 	var data map[string]interface{}
 	err := json.NewDecoder(r.Body).Decode(&data)
 	if err != nil {
-		errorWriter(w, 400)
+		errorWriter(w, 400, http.StatusText(http.StatusBadRequest))
 		return
 	}
 	password, ok := data["password"].(string)
 	if !ok {
-		errorWriter(w, 400)
+		errorWriter(w, 400, http.StatusText(http.StatusBadRequest))
 		return
 	}
 	username, ok := data["username"].(string)
 	if !ok {
-		errorWriter(w, 400)
+		errorWriter(w, 400, http.StatusText(http.StatusBadRequest))
 		return
 	}
 	email, ok := data["email"].(string)
 	if !ok {
-		errorWriter(w, 400)
+		errorWriter(w, 400, http.StatusText(http.StatusBadRequest))
 		return
 	}
 
 	bytes, err := bcrypt.GenerateFromPassword([]byte(password), 12)
 	if err != nil {
-		errorWriter(w, 500)
+		errorWriter(w, 500, http.StatusText(http.StatusInternalServerError))
 		return
 	}
 
 	stmt, err := db.Prepare("INSERT INTO chat_user (username, email, password) VALUES(?, ?, ?)")
 	if err != nil {
-		errorWriter(w, 500)
+		errorWriter(w, 500, http.StatusText(http.StatusInternalServerError))
 		return
 	}
 	res, err := stmt.Exec(username, email, bytes)
 	if err != nil {
-		errorWriter(w, 500)
+		errorWriter(w, 500, http.StatusText(http.StatusInternalServerError))
 		return
 	}
 	lastID, err := res.LastInsertId()
 	if err != nil {
-		errorWriter(w, 500)
+		errorWriter(w, 500, http.StatusText(http.StatusInternalServerError))
 		return
 	}
 
 	token := generateToken(lastID, username, email)
 	tokenString, err := token.SignedString([]byte(config.SECRET))
 	if err != nil {
-		errorWriter(w, 500)
+		errorWriter(w, 500, http.StatusText(http.StatusInternalServerError))
 		return
 	}
 	m := map[string]string{
@@ -312,46 +312,46 @@ func signin(w http.ResponseWriter, r *http.Request) {
 	var data map[string]interface{}
 	err := json.NewDecoder(r.Body).Decode(&data)
 	if err != nil {
-		errorWriter(w, 400)
+		errorWriter(w, 400, http.StatusText(http.StatusBadRequest))
 		return
 	}
 	password, ok := data["password"].(string)
 	if !ok {
-		errorWriter(w, 400)
+		errorWriter(w, 400, http.StatusText(http.StatusBadRequest))
 		return
 	}
 	email, ok := data["email"].(string)
 	if !ok {
-		errorWriter(w, 400)
+		errorWriter(w, 400, http.StatusText(http.StatusBadRequest))
 		return
 	}
 	var hash string
 	err = db.QueryRow("SELECT password FROM chat_user WHERE email=?", email).Scan(&hash)
 	switch {
 	case err == sql.ErrNoRows:
-		errorWriter(w, 401)
+		errorWriter(w, 401, "Wrong username or password")
 	case err != nil:
-		errorWriter(w, 500)
+		errorWriter(w, 500, http.StatusText(http.StatusInternalServerError))
 	default:
 		err := bcrypt.CompareHashAndPassword([]byte(hash), []byte(password))
 		switch {
 		case err == bcrypt.ErrMismatchedHashAndPassword:
-			errorWriter(w, 401)
+			errorWriter(w, 401, "Wrong username or password")
 		case err != nil:
-			errorWriter(w, 500)
+			errorWriter(w, 500, http.StatusText(http.StatusInternalServerError))
 		default:
 			var id2 int64
 			var username2 string
 			var email2 string
 			err = db.QueryRow("SELECT id, username, email FROM chat_user WHERE email=?", email).Scan(&id2, &username2, &email2)
 			if err != nil {
-				errorWriter(w, 500)
+				errorWriter(w, 500, http.StatusText(http.StatusInternalServerError))
 				return
 			}
 			token := generateToken(id2, username2, email2)
 			tokenString, err := token.SignedString([]byte(config.SECRET))
 			if err != nil {
-				errorWriter(w, 500)
+				errorWriter(w, 500, http.StatusText(http.StatusInternalServerError))
 				return
 			}
 			m := map[string]string{
