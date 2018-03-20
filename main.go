@@ -76,11 +76,17 @@ func main() {
 	originsOk := handlers.AllowedOrigins([]string{config.ALLOW_ORIGIN})
 	headersOk := handlers.AllowedHeaders([]string{"Content-Type", "Authorization"})
 
+	hub := newHub()
+	go hub.run()
+
 	r := mux.NewRouter()
 	r.HandleFunc("/users/signup", signup).Methods("POST")
 	r.HandleFunc("/users/signin", signin).Methods("POST")
 	r.Handle("/users/{id}/chats", jwtMiddleware.Handler(getChatsHandler)).Methods("GET")
 	r.Handle("/users/{id}/chats/{chat_id}/messages", jwtMiddleware.Handler(getChatMessagesHandler)).Methods("GET")
+	r.HandleFunc("/ws", func(w http.ResponseWriter, r *http.Request) {
+		serveWs(hub, w, r)
+	})
 	fmt.Println("Server starting on port", config.PORT)
 	log.Fatal(http.ListenAndServe(config.PORT, handlers.CORS(originsOk, headersOk)(handlers.LoggingHandler(os.Stdout, r))))
 }
