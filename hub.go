@@ -4,28 +4,38 @@
 
 package main
 
-// hub maintains the set of active clients and broadcasts messages to the
+type message struct {
+	body []byte
+	room string
+}
+
+type subscription struct {
+	conn *Client
+	room string
+}
+
+// Hub maintains the set of active clients and broadcasts messages to the
 // clients.
 type Hub struct {
 	// Registered clients.
-	clients map[*Client]bool
+	rooms map[string]map[*Client]bool
 
 	// Inbound messages from the clients.
-	broadcast chan []byte
+	broadcast chan message
 
 	// Register requests from the clients.
-	register chan *Client
+	register chan subscription
 
 	// Unregister requests from clients.
-	unregister chan *Client
+	unregister chan subscription
 }
 
 func newHub() *Hub {
 	return &Hub{
-		broadcast:  make(chan []byte),
-		register:   make(chan *Client),
-		unregister: make(chan *Client),
-		clients:    make(map[*Client]bool),
+		broadcast:  make(chan message),
+		register:   make(chan subscription),
+		unregister: make(chan subscription),
+		rooms:      make(map[string]map[*Client]bool),
 	}
 }
 
@@ -33,19 +43,35 @@ func (h *Hub) run() {
 	for {
 		select {
 		case client := <-h.register:
-			h.clients[client] = true
-		case client := <-h.unregister:
-			if _, ok := h.clients[client]; ok {
-				delete(h.clients, client)
-				close(client.send)
+			connections := h.rooms[client.room]
+			if connections == nil {
+				connections = make(map[*Client]bool)
+				h.rooms[client.room] = connections
 			}
+			h.rooms[client.room][client.conn] = true
+		case client := <-h.unregister:
+			connections := h.rooms[client.room]
+			if connections != nil {
+				if _, ok := connections[client.conn]; ok {
+					delete(connections, client.conn)
+					close(client.conn.send)
+					if len(connections) == 0 {
+						delete(h.rooms, client.room)
+					}
+				}
+			}
+
 		case message := <-h.broadcast:
-			for client := range h.clients {
+			connections := h.rooms[message.room]
+			for client := range connections {
 				select {
-				case client.send <- message:
+				case client.send <- message.body:
 				default:
 					close(client.send)
-					delete(h.clients, client)
+					delete(connections, client)
+					if len(connections) == 0 {
+						delete(h.rooms, message.room)
+					}
 				}
 			}
 		}
