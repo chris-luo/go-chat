@@ -6,6 +6,8 @@ package main
 
 import (
 	"bytes"
+	"encoding/json"
+	"fmt"
 	"log"
 	"net/http"
 	"time"
@@ -51,14 +53,30 @@ type Client struct {
 	send chan []byte
 }
 
+type outMessage struct {
+	ID         string `json:"id"`
+	Body       string `json:"body"`
+	SenderID   string `json:"senderID"`
+	SendTime   string `json:"sendTime"`
+	ReadStatus int    `json:"readStatus"`
+}
+
+type action struct {
+	Type    int
+	Payload string
+}
+
 // readPump pumps messages from the websocket connection to the hub.
 //
 // The application runs readPump in a per-connection goroutine. The application
 // ensures that there is at most one reader on a connection by executing all
 // reads from this goroutine.
 func (s subscription) readPump() {
+	fmt.Println("readPump")
+	fmt.Printf("%+v\n", s)
 	c := s.conn
 	defer func() {
+		fmt.Println("readPump defered!")
 		c.hub.unregister <- s
 		c.conn.Close()
 	}()
@@ -74,8 +92,32 @@ func (s subscription) readPump() {
 			break
 		}
 		msg = bytes.TrimSpace(bytes.Replace(msg, newline, space, -1))
-		m := message{msg, s.room}
-		c.hub.broadcast <- m
+
+		fmt.Println("room: ", s.room)
+		var action action
+		err = json.Unmarshal(msg, &action)
+		if err != nil {
+			log.Printf("error: %v", err)
+			break
+		}
+		fmt.Printf("action: %+v\n", action)
+
+		switch action.Type {
+		case 1:
+			fmt.Printf("sub: %+v\n", s)
+			s.room = action.Payload
+			fmt.Printf("subAfter: %+v\n", s)
+			c.hub.register <- s
+		case 2:
+			if s.room == "0" {
+				log.Println("Did not set room.")
+				return
+			}
+			m := message{[]byte(action.Payload), s.room}
+			c.hub.broadcast <- m
+		default:
+			fmt.Println("TODO: Implement")
+		}
 	}
 }
 
@@ -85,9 +127,11 @@ func (s subscription) readPump() {
 // application ensures that there is at most one writer to a connection by
 // executing all writes from this goroutine.
 func (s subscription) writePump() {
+	fmt.Println("writePump")
 	c := s.conn
 	ticker := time.NewTicker(pingPeriod)
 	defer func() {
+		fmt.Println("writePump defered!")
 		ticker.Stop()
 		c.conn.Close()
 	}()
@@ -105,7 +149,11 @@ func (s subscription) writePump() {
 			if err != nil {
 				return
 			}
-			w.Write(message)
+			// fmt.Println("writePump message", string(message))
+			om := outMessage{"A", string(message), "A", "1294706395881547000", 0}
+			fmt.Println("writePump outMessage: ", om)
+			b, err := json.Marshal(om)
+			w.Write(b)
 
 			// Add queued chat messages to the current websocket message.
 			n := len(c.send)
@@ -134,8 +182,9 @@ func serveWs(hub *Hub, w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	client := &Client{hub: hub, conn: conn, send: make(chan []byte, 256)}
-	s := subscription{client, r.FormValue("room")}
-	client.hub.register <- s
+
+	s := subscription{client, "0"}
+	// client.hub.register <- s
 
 	// Allow collection of memory referenced by the caller by doing all work in
 	// new goroutines.

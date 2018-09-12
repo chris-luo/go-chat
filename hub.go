@@ -4,6 +4,8 @@
 
 package main
 
+import "fmt"
+
 type message struct {
 	body []byte
 	room string
@@ -50,6 +52,7 @@ func (h *Hub) run() {
 			}
 			h.rooms[client.room][client.conn] = true
 		case client := <-h.unregister:
+			// TODO: clean out all rooms user is in
 			connections := h.rooms[client.room]
 			if connections != nil {
 				if _, ok := connections[client.conn]; ok {
@@ -62,6 +65,7 @@ func (h *Hub) run() {
 			}
 
 		case message := <-h.broadcast:
+			fmt.Printf("rooms: %+v\n", h.rooms)
 			connections := h.rooms[message.room]
 			for client := range connections {
 				select {
