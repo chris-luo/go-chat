@@ -66,6 +66,11 @@ type action struct {
 	Payload string
 }
 
+type inMessage struct {
+	Room    string
+	Message string
+}
+
 // readPump pumps messages from the websocket connection to the hub.
 //
 // The application runs readPump in a per-connection goroutine. The application
@@ -93,6 +98,7 @@ func (s subscription) readPump() {
 		}
 		msg = bytes.TrimSpace(bytes.Replace(msg, newline, space, -1))
 
+		fmt.Println(string(msg))
 		fmt.Println("room: ", s.room)
 		var action action
 		err = json.Unmarshal(msg, &action)
@@ -104,8 +110,10 @@ func (s subscription) readPump() {
 
 		switch action.Type {
 		case 1:
+			// TODO: Check if user has this room
 			fmt.Printf("sub: %+v\n", s)
 			s.room = action.Payload
+			s.rooms = append(s.rooms, action.Payload)
 			fmt.Printf("subAfter: %+v\n", s)
 			c.hub.register <- s
 		case 2:
@@ -113,8 +121,22 @@ func (s subscription) readPump() {
 				log.Println("Did not set room.")
 				return
 			}
-			m := message{[]byte(action.Payload), s.room}
-			c.hub.broadcast <- m
+			var inMessage inMessage
+			err := json.Unmarshal([]byte(action.Payload), &inMessage)
+			if err != nil {
+				log.Printf("error: %v", err)
+				return
+			}
+			fmt.Printf("inMessage: %+v\n", inMessage)
+
+			if found := s.findRoom(inMessage.Room); found {
+				m := message{[]byte(inMessage.Message), inMessage.Room}
+				c.hub.broadcast <- m
+			} else {
+				log.Println("Room does not match")
+				return
+			}
+
 		default:
 			fmt.Println("TODO: Implement")
 		}
@@ -174,6 +196,15 @@ func (s subscription) writePump() {
 	}
 }
 
+func (s subscription) findRoom(val string) bool {
+	for _, room := range s.rooms {
+		if room == val {
+			return true
+		}
+	}
+	return false
+}
+
 // serveWs handles websocket requests from the peer.
 func serveWs(hub *Hub, w http.ResponseWriter, r *http.Request) {
 	conn, err := upgrader.Upgrade(w, r, nil)
@@ -183,7 +214,8 @@ func serveWs(hub *Hub, w http.ResponseWriter, r *http.Request) {
 	}
 	client := &Client{hub: hub, conn: conn, send: make(chan []byte, 256)}
 
-	s := subscription{client, "0"}
+	rooms := []string{}
+	s := subscription{client, "0", rooms}
 	// client.hub.register <- s
 
 	// Allow collection of memory referenced by the caller by doing all work in

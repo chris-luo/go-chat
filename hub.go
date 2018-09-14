@@ -12,8 +12,9 @@ type message struct {
 }
 
 type subscription struct {
-	conn *Client
-	room string
+	conn  *Client
+	room  string
+	rooms []string
 }
 
 // Hub maintains the set of active clients and broadcasts messages to the
@@ -52,18 +53,19 @@ func (h *Hub) run() {
 			}
 			h.rooms[client.room][client.conn] = true
 		case client := <-h.unregister:
-			// TODO: clean out all rooms user is in
-			connections := h.rooms[client.room]
-			if connections != nil {
-				if _, ok := connections[client.conn]; ok {
-					delete(connections, client.conn)
-					close(client.conn.send)
-					if len(connections) == 0 {
-						delete(h.rooms, client.room)
+			for _, room := range client.rooms {
+				connections := h.rooms[room]
+				if connections != nil {
+					if _, ok := connections[client.conn]; ok {
+						delete(connections, client.conn)
+						if len(connections) == 0 {
+							delete(h.rooms, room)
+						}
 					}
 				}
 			}
-
+			close(client.conn.send)
+			fmt.Printf("%+v\n", h.rooms)
 		case message := <-h.broadcast:
 			fmt.Printf("rooms: %+v\n", h.rooms)
 			connections := h.rooms[message.room]
