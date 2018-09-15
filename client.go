@@ -111,6 +111,9 @@ func (s subscription) readPump() {
 		switch action.Type {
 		case 1:
 			// TODO: Check if user has this room
+			if s.findRoom(action.Payload) {
+				break
+			}
 			fmt.Printf("sub: %+v\n", s)
 			s.room = action.Payload
 			s.rooms = append(s.rooms, action.Payload)
@@ -129,7 +132,7 @@ func (s subscription) readPump() {
 			}
 			fmt.Printf("inMessage: %+v\n", inMessage)
 
-			if found := s.findRoom(inMessage.Room); found {
+			if s.findRoom(inMessage.Room) {
 				m := message{[]byte(inMessage.Message), inMessage.Room}
 				c.hub.broadcast <- m
 			} else {
