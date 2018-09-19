@@ -31,14 +31,17 @@ type Hub struct {
 
 	// Unregister requests from clients.
 	unregister chan subscription
+
+	unregisterOne chan subscription
 }
 
 func newHub() *Hub {
 	return &Hub{
-		broadcast:  make(chan message),
-		register:   make(chan subscription),
-		unregister: make(chan subscription),
-		rooms:      make(map[string]map[*Client]bool),
+		broadcast:     make(chan message),
+		register:      make(chan subscription),
+		unregister:    make(chan subscription),
+		unregisterOne: make(chan subscription),
+		rooms:         make(map[string]map[*Client]bool),
 	}
 }
 
@@ -65,7 +68,16 @@ func (h *Hub) run() {
 				}
 			}
 			close(client.conn.send)
-			fmt.Printf("%+v\n", h.rooms)
+		case client := <-h.unregisterOne:
+			connections := h.rooms[client.room]
+			if connections != nil {
+				if _, ok := connections[client.conn]; ok {
+					delete(connections, client.conn)
+					if len(connections) == 0 {
+						delete(h.rooms, client.room)
+					}
+				}
+			}
 		case message := <-h.broadcast:
 			fmt.Printf("rooms: %+v\n", h.rooms)
 			connections := h.rooms[message.room]

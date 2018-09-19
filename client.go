@@ -78,7 +78,6 @@ type inMessage struct {
 // reads from this goroutine.
 func (s subscription) readPump() {
 	fmt.Println("readPump")
-	fmt.Printf("%+v\n", s)
 	c := s.conn
 	defer func() {
 		fmt.Println("readPump defered!")
@@ -98,8 +97,6 @@ func (s subscription) readPump() {
 		}
 		msg = bytes.TrimSpace(bytes.Replace(msg, newline, space, -1))
 
-		fmt.Println(string(msg))
-		fmt.Println("room: ", s.room)
 		var action action
 		err = json.Unmarshal(msg, &action)
 		if err != nil {
@@ -109,15 +106,22 @@ func (s subscription) readPump() {
 		fmt.Printf("action: %+v\n", action)
 
 		switch action.Type {
+		case 0:
+			s.room = action.Payload
+			for i, room := range s.rooms {
+				if room == s.room {
+					s.rooms = append(s.rooms[:i], s.rooms[i+1:]...)
+					break
+				}
+			}
+			c.hub.unregisterOne <- s
 		case 1:
 			// TODO: Check if user has this room
 			if s.findRoom(action.Payload) {
 				break
 			}
-			fmt.Printf("sub: %+v\n", s)
 			s.room = action.Payload
 			s.rooms = append(s.rooms, action.Payload)
-			fmt.Printf("subAfter: %+v\n", s)
 			c.hub.register <- s
 		case 2:
 			if s.room == "0" {
