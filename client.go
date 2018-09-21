@@ -182,13 +182,31 @@ func (s subscription) writePump() {
 			om := outMessage{"A", string(message), "A", "1294706395881547000", 0}
 			fmt.Println("writePump outMessage: ", om)
 			b, err := json.Marshal(om)
+
+			if err != nil {
+				fmt.Println(err)
+				return
+			}
 			w.Write(b)
 
 			// Add queued chat messages to the current websocket message.
 			n := len(c.send)
+			fmt.Println("n: ", n)
 			for i := 0; i < n; i++ {
+				message, ok := <-c.send
+				if !ok {
+					c.conn.WriteMessage(websocket.CloseMessage, []byte{})
+					return
+				}
+				om := outMessage{"A", string(message), "A", "1294706395881547000", 0}
+				fmt.Println("writePump outMessage: ", om)
+				b, err := json.Marshal(om)
+				if err != nil {
+					fmt.Println(err)
+					return
+				}
 				w.Write(newline)
-				w.Write(<-c.send)
+				w.Write(b)
 			}
 
 			if err := w.Close(); err != nil {
