@@ -50,7 +50,7 @@ type Client struct {
 	conn *websocket.Conn
 
 	// Buffered channel of outbound messages.
-	send chan []byte
+	send chan message
 }
 
 type outMessage struct {
@@ -179,7 +179,7 @@ func (s subscription) writePump() {
 				return
 			}
 			// fmt.Println("writePump message", string(message))
-			om := outMessage{"A", string(message), "A", "1294706395881547000", 0}
+			om := outMessage{"A", string(message.body), "A", "1294706395881547000", 0}
 			fmt.Println("writePump outMessage: ", om)
 			b, err := json.Marshal(om)
 
@@ -198,7 +198,7 @@ func (s subscription) writePump() {
 					c.conn.WriteMessage(websocket.CloseMessage, []byte{})
 					return
 				}
-				om := outMessage{"A", string(message), "A", "1294706395881547000", 0}
+				om := outMessage{"A", string(message.body), "A", "1294706395881547000", 0}
 				fmt.Println("writePump outMessage: ", om)
 				b, err := json.Marshal(om)
 				if err != nil {
@@ -237,7 +237,7 @@ func serveWs(hub *Hub, w http.ResponseWriter, r *http.Request) {
 		log.Println(err)
 		return
 	}
-	client := &Client{hub: hub, conn: conn, send: make(chan []byte, 256)}
+	client := &Client{hub: hub, conn: conn, send: make(chan message, 256)}
 
 	rooms := []string{}
 	s := subscription{client, "0", rooms}

@@ -83,7 +83,7 @@ func (h *Hub) run() {
 			connections := h.rooms[message.room]
 			for client := range connections {
 				select {
-				case client.send <- message.body:
+				case client.send <- message:
 				default:
 					close(client.send)
 					delete(connections, client)
