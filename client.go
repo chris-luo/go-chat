@@ -71,11 +71,6 @@ type action struct {
 	Payload string
 }
 
-type outAction struct {
-	Type    int        `json:"type"`
-	Payload outPayload `json:"payload"`
-}
-
 type inMessage struct {
 	Room    string
 	Message string
@@ -189,9 +184,9 @@ func (s subscription) writePump() {
 				return
 			}
 
-			action := createOutAction(message)
+			payload := createOutPayload(message)
 
-			b, err := json.Marshal(action)
+			b, err := json.Marshal(payload)
 
 			if err != nil {
 				fmt.Println(err)
@@ -209,9 +204,9 @@ func (s subscription) writePump() {
 					return
 				}
 
-				action := createOutAction(message)
+				payload := createOutPayload(message)
 
-				b, err := json.Marshal(action)
+				b, err := json.Marshal(payload)
 
 				if err != nil {
 					fmt.Println(err)
@@ -261,15 +256,12 @@ func serveWs(hub *Hub, w http.ResponseWriter, r *http.Request) {
 	go s.readPump()
 }
 
-func createOutAction(m message) outAction {
+func createOutPayload(m message) outPayload {
 	om := outMessage{"A", string(m.body), "A", "1294706395881547000", 0}
 	fmt.Println("writePump outMessage: ", om)
 
 	payload := outPayload{m.room, om}
 	fmt.Println("writePump outChat: ", payload)
 
-	action := outAction{3, payload}
-	fmt.Println("writePump outAction: ", action)
-
-	return action
+	return payload
 }
