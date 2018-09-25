@@ -61,9 +61,19 @@ type outMessage struct {
 	ReadStatus int    `json:"readStatus"`
 }
 
+type outPayload struct {
+	Room    string     `json:"id"`
+	Message outMessage `json:"message"`
+}
+
 type action struct {
 	Type    int
 	Payload string
+}
+
+type outAction struct {
+	Type    int        `json:"type"`
+	Payload outPayload `json:"payload"`
 }
 
 type inMessage struct {
@@ -178,10 +188,10 @@ func (s subscription) writePump() {
 			if err != nil {
 				return
 			}
-			// fmt.Println("writePump message", string(message))
-			om := outMessage{"A", string(message.body), "A", "1294706395881547000", 0}
-			fmt.Println("writePump outMessage: ", om)
-			b, err := json.Marshal(om)
+
+			action := createOutAction(message)
+
+			b, err := json.Marshal(action)
 
 			if err != nil {
 				fmt.Println(err)
@@ -198,9 +208,11 @@ func (s subscription) writePump() {
 					c.conn.WriteMessage(websocket.CloseMessage, []byte{})
 					return
 				}
-				om := outMessage{"A", string(message.body), "A", "1294706395881547000", 0}
-				fmt.Println("writePump outMessage: ", om)
-				b, err := json.Marshal(om)
+
+				action := createOutAction(message)
+
+				b, err := json.Marshal(action)
+
 				if err != nil {
 					fmt.Println(err)
 					return
@@ -247,4 +259,17 @@ func serveWs(hub *Hub, w http.ResponseWriter, r *http.Request) {
 	// new goroutines.
 	go s.writePump()
 	go s.readPump()
+}
+
+func createOutAction(m message) outAction {
+	om := outMessage{"A", string(m.body), "A", "1294706395881547000", 0}
+	fmt.Println("writePump outMessage: ", om)
+
+	payload := outPayload{m.room, om}
+	fmt.Println("writePump outChat: ", payload)
+
+	action := outAction{3, payload}
+	fmt.Println("writePump outAction: ", action)
+
+	return action
 }
