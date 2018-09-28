@@ -32,7 +32,7 @@ type Configuration struct {
 }
 
 type Chat struct {
-	ID       int64     `json:"id"`
+	ID       string    `json:"id"`
 	Users    []string  `json:"users"`
 	Messages []Message `json:"messages"`
 }
@@ -168,7 +168,7 @@ var getChatsHandler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Reque
 		}
 		users := []string{username}
 		messages := []Message{Message{messageID, body, senderID, sendTime, readStatus}}
-		chats = append(chats, Chat{chatID, users, messages})
+		chats = append(chats, Chat{strconv.FormatInt(chatID, 10), users, messages})
 	}
 
 	err = rows.Err()
