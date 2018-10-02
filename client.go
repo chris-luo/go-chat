@@ -12,6 +12,8 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/dgrijalva/jwt-go"
+
 	"github.com/gorilla/websocket"
 )
 
@@ -148,7 +150,52 @@ func (s subscription) readPump() {
 				log.Println("Room does not match")
 				return
 			}
+		case 99:
+			token, err := jwt.Parse(action.Payload, func(token *jwt.Token) (interface{}, error) {
+				if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
+					return nil, fmt.Errorf("Unexpected signing method: %v", token.Header["alg"])
+				}
 
+				return []byte(config.SECRET), nil
+			})
+
+			if claims, ok := token.Claims.(jwt.MapClaims); ok && token.Valid {
+				fmt.Println(claims)
+
+				// check exp time
+				exp, ok := claims["exp"].(float64)
+				if !ok {
+					fmt.Println(claims["exp"])
+					return
+				}
+
+				s.exp = int64(exp)
+				if s.isExpired() {
+					fmt.Println("expired")
+					return
+				}
+
+				id, ok := claims["id"].(string)
+				if !ok {
+					return
+				}
+				username, ok := claims["username"].(string)
+				if !ok {
+					return
+				}
+				email, ok := claims["email"].(string)
+				if !ok {
+					return
+				}
+
+				s.user = ChatUser{id, username, email}
+				fmt.Printf("%+v\n", s)
+				// TODO: send auth success
+			} else {
+				// TODO: send auth failed
+				fmt.Println(err)
+				return
+			}
 		default:
 			fmt.Println("TODO: Implement")
 		}
@@ -237,6 +284,10 @@ func (s subscription) findRoom(val string) bool {
 	return false
 }
 
+func (s subscription) isExpired() bool {
+	return time.Now().Unix() > s.exp
+}
+
 // serveWs handles websocket requests from the peer.
 func serveWs(hub *Hub, w http.ResponseWriter, r *http.Request) {
 	conn, err := upgrader.Upgrade(w, r, nil)
@@ -247,7 +298,7 @@ func serveWs(hub *Hub, w http.ResponseWriter, r *http.Request) {
 	client := &Client{hub: hub, conn: conn, send: make(chan message, 256)}
 
 	rooms := []string{}
-	s := subscription{client, "0", rooms}
+	s := subscription{client, "0", rooms, ChatUser{}, 0}
 	// client.hub.register <- s
 
 	// Allow collection of memory referenced by the caller by doing all work in

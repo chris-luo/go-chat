@@ -45,6 +45,12 @@ type Message struct {
 	ReadStatus int    `json:"read_status"`
 }
 
+type ChatUser struct {
+	ID       string
+	Username string
+	Email    string
+}
+
 func main() {
 	file, err := os.Open("config/config.development.json")
 	if err != nil {
@@ -123,18 +129,13 @@ var getChatsHandler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Reque
 		errorWriter(w, 400, http.StatusText(http.StatusBadRequest))
 		return
 	}
-	claimsID, ok := claims["id"].(float64)
+	claimsID, ok := claims["id"].(string)
 	if !ok {
 		errorWriter(w, 400, http.StatusText(http.StatusBadRequest))
 		return
 	}
 	vars := mux.Vars(r)
-	varsID, err := strconv.Atoi(vars["id"])
-	if err != nil {
-		errorWriter(w, 400, http.StatusText(http.StatusBadRequest))
-		return
-	}
-	if varsID != int(claimsID) {
+	if vars["id"] != claimsID {
 		errorWriter(w, 403, http.StatusText(http.StatusForbidden))
 		return
 	}
@@ -371,7 +372,7 @@ func signin(w http.ResponseWriter, r *http.Request) {
 func generateToken(id int64, username string, email string) *jwt.Token {
 	token := jwt.New(jwt.SigningMethodHS256)
 	claims := token.Claims.(jwt.MapClaims)
-	claims["id"] = id
+	claims["id"] = strconv.FormatInt(id, 10)
 	claims["username"] = username
 	claims["email"] = email
 	claims["iss"] = config.APP

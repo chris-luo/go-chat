@@ -15,6 +15,8 @@ type subscription struct {
 	conn  *Client
 	room  string
 	rooms []string
+	user  ChatUser
+	exp   int64
 }
 
 // Hub maintains the set of active clients and broadcasts messages to the
