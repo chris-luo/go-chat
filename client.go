@@ -164,6 +164,11 @@ func (s subscription) readPump() {
 				return []byte(config.SECRET), nil
 			})
 
+			if err != nil {
+				fmt.Println(err)
+				return
+			}
+
 			if claims, ok := token.Claims.(jwt.MapClaims); ok && token.Valid {
 				fmt.Println(claims)
 
@@ -194,7 +199,7 @@ func (s subscription) readPump() {
 				// TODO: send auth success
 			} else {
 				// TODO: send auth failed
-				fmt.Println(err)
+				fmt.Println("token not valid")
 				return
 			}
 		default:
