@@ -112,6 +112,11 @@ func (s subscription) readPump() {
 		}
 		fmt.Printf("action: %+v\n", action)
 
+		if s.isExpired() && action.Type != 99 {
+			fmt.Println("subscription expired and not auth action")
+			return
+		}
+
 		switch action.Type {
 		case 0:
 			s.room = action.Payload
@@ -170,10 +175,6 @@ func (s subscription) readPump() {
 				}
 
 				s.exp = int64(exp)
-				if s.isExpired() {
-					fmt.Println("expired")
-					return
-				}
 
 				id, ok := claims["id"].(string)
 				if !ok {
