@@ -7,8 +7,9 @@ package main
 import "fmt"
 
 type message struct {
-	body []byte
-	room string
+	body   []byte
+	room   string
+	sender string
 }
 
 type subscription struct {

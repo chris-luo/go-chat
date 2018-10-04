@@ -149,7 +149,7 @@ func (s subscription) readPump() {
 			fmt.Printf("inMessage: %+v\n", inMessage)
 
 			if s.findRoom(inMessage.Room) {
-				m := message{[]byte(inMessage.Message), inMessage.Room}
+				m := message{[]byte(inMessage.Message), inMessage.Room, s.user.ID}
 				c.hub.broadcast <- m
 			} else {
 				log.Println("Room does not match")
@@ -314,7 +314,7 @@ func serveWs(hub *Hub, w http.ResponseWriter, r *http.Request) {
 }
 
 func createOutPayload(m message) outPayload {
-	om := outMessage{"A", string(m.body), "A", "1294706395881547000", 0}
+	om := outMessage{time.Now().UTC().Format(time.RFC3339Nano), string(m.body), m.sender, time.Now().UTC().Format(time.RFC3339), 0}
 	fmt.Println("writePump outMessage: ", om)
 
 	payload := outPayload{m.room, om}
