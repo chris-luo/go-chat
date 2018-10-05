@@ -204,18 +204,13 @@ var getChatMessagesHandler = http.HandlerFunc(func(w http.ResponseWriter, r *htt
 		errorWriter(w, 400, http.StatusText(http.StatusBadRequest))
 		return
 	}
-	claimsID, ok := claims["id"].(float64)
+	claimsID, ok := claims["id"].(string)
 	if !ok {
 		errorWriter(w, 400, http.StatusText(http.StatusBadRequest))
 		return
 	}
 	vars := mux.Vars(r)
-	varsID, err := strconv.Atoi(vars["id"])
-	if err != nil {
-		errorWriter(w, 400, http.StatusText(http.StatusBadRequest))
-		return
-	}
-	if varsID != int(claimsID) {
+	if vars["id"] != claimsID {
 		errorWriter(w, 403, http.StatusText(http.StatusForbidden))
 		return
 	}
