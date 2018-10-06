@@ -38,11 +38,11 @@ type Chat struct {
 }
 
 type Message struct {
-	ID         int64  `json:"id"`
+	ID         string `json:"id"`
 	Body       string `json:"body"`
-	SenderID   int64  `json:"sender_id"`
-	SendTime   string `json:"send_time"`
-	ReadStatus int    `json:"read_status"`
+	SenderID   string `json:"senderID"`
+	SendTime   string `json:"sendTime"`
+	ReadStatus int    `json:"readStatus"`
 }
 
 type ChatUser struct {
@@ -168,7 +168,7 @@ var getChatsHandler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Reque
 			return
 		}
 		users := []string{username}
-		messages := []Message{Message{messageID, body, senderID, sendTime, readStatus}}
+		messages := []Message{Message{strconv.FormatInt(messageID, 10), body, strconv.FormatInt(senderID, 10), sendTime, readStatus}}
 		chats = append(chats, Chat{strconv.FormatInt(chatID, 10), users, messages})
 	}
 
@@ -241,7 +241,7 @@ var getChatMessagesHandler = http.HandlerFunc(func(w http.ResponseWriter, r *htt
 			errorWriter(w, 500, http.StatusText(http.StatusInternalServerError))
 			return
 		}
-		messages = append(messages, Message{id, body, senderID, sendTime, readStatus})
+		messages = append(messages, Message{strconv.FormatInt(id, 10), body, strconv.FormatInt(senderID, 10), sendTime, readStatus})
 	}
 
 	err = rows.Err()

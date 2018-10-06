@@ -55,17 +55,9 @@ type Client struct {
 	send chan message
 }
 
-type outMessage struct {
-	ID         string `json:"id"`
-	Body       string `json:"body"`
-	SenderID   string `json:"senderID"`
-	SendTime   string `json:"sendTime"`
-	ReadStatus int    `json:"readStatus"`
-}
-
 type outPayload struct {
-	Room    string     `json:"id"`
-	Message outMessage `json:"message"`
+	Room    string  `json:"id"`
+	Message Message `json:"message"`
 }
 
 type action struct {
@@ -314,7 +306,7 @@ func serveWs(hub *Hub, w http.ResponseWriter, r *http.Request) {
 }
 
 func createOutPayload(m message) outPayload {
-	om := outMessage{time.Now().UTC().Format(time.RFC3339Nano), string(m.body), m.sender, time.Now().UTC().Format(time.RFC3339), 0}
+	om := Message{time.Now().UTC().Format(time.RFC3339Nano), string(m.body), m.sender, time.Now().UTC().Format(time.RFC3339), 0}
 	fmt.Println("writePump outMessage: ", om)
 
 	payload := outPayload{m.room, om}
